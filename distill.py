@@ -35,8 +35,8 @@ CONFIG: dict = {
         "logging_steps": 25,
         "report_to": "none",
         "save_strategy": "epoch",
-        "fp16": True,
-        "bf16": False,
+        "fp16": False,  # Disabled to avoid AMP compatibility issues
+        "bf16": False,  # Disabled to avoid AMP compatibility issues
         "gradient_checkpointing": True,
         "dataloader_pin_memory": True,  # Pin memory for faster GPU transfer
         "dataloader_num_workers": 4,  # Parallel data loading
@@ -190,9 +190,8 @@ def patched_generate(*args, **kwargs) -> torch.Tensor:
         kwargs["input_ids"] = kwargs["input_ids"].to(student_model.device)
     if "attention_mask" in kwargs:
         kwargs["attention_mask"] = kwargs["attention_mask"].to(student_model.device)
-    # Use autocast with appropriate dtype
-    with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=torch.cuda.is_available()):
-        return original_generate(*args, **kwargs)
+    # Call generate without autocast since we're using fp32
+    return original_generate(*args, **kwargs)
 
 student_model.generate = patched_generate
 
@@ -230,10 +229,9 @@ for prompt in test_prompts:
         messages, tokenize=False, add_generation_prompt=True
     )
     inputs = tokenizer(input_text, return_tensors="pt").to("cuda")
-    with torch.autocast(device_type="cuda", dtype=torch.float16):
-        outputs = distilled_model.generate(
-            **inputs, max_new_tokens=256, do_sample=True, temperature=0.7
-        )
+    outputs = distilled_model.generate(
+        **inputs, max_new_tokens=256, do_sample=True, temperature=0.7
+    )
     response: str = tokenizer.decode(outputs[0], skip_special_tokens=True)
     answer: str = response.split("<|start_header_id|>assistant<|end_header_id|>\n\n")[-1]
     print(f"Q: {prompt}\nA: {answer}\n{'-'*70}")

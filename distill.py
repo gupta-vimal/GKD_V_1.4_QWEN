@@ -1,12 +1,21 @@
 from __future__ import annotations
 
+import os
 import torch
+import warnings
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
 )
 from datasets import load_dataset, Dataset
 from trl import GKDTrainer, GKDConfig
+
+# Set environment variables before importing tokenizers
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["TRL_EXPERIMENTAL_SILENCE"] = "1"
+
+# Suppress deprecation warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # ============================================================================
 # Configuration
@@ -18,7 +27,7 @@ CONFIG: dict = {
     "num_prompts": None,  # None means use entire dataset
     "gkd_config": {"lmbda": 0.7, "beta": 0.5, "seq_kd": True},
     "training_config": {
-        "output_dir": "./student_model_gkd_Wtihout_peft",
+        "output_dir": "./student_model_gkd_Without_peft",
         "per_device_train_batch_size": 4,
         "gradient_accumulation_steps": 8,
         "learning_rate": 2e-4,
@@ -31,6 +40,7 @@ CONFIG: dict = {
         "gradient_checkpointing": True,
         "dataloader_pin_memory": True,  # Pin memory for faster GPU transfer
         "dataloader_num_workers": 4,  # Parallel data loading
+        "use_cache": False,  # Disable cache when gradient checkpointing is enabled
     },
 }
 
@@ -101,7 +111,7 @@ formatted_dataset = hf_dataset.map(format_data_for_gkd)
 print("Loading teacher model...")
 teacher_model = AutoModelForCausalLM.from_pretrained(
     CONFIG["teacher_model_id"],
-    torch_dtype="auto",
+    dtype="auto",
     device_map="auto",
     trust_remote_code=True
 )
@@ -114,7 +124,7 @@ print("Teacher model loaded successfully")
 print("Loading student model...")
 student_model = AutoModelForCausalLM.from_pretrained(
     CONFIG["student_model_id"],
-    torch_dtype="auto",
+    dtype="auto",
     device_map="auto",
     trust_remote_code=True
 )
@@ -128,7 +138,11 @@ print(f"Before alignment: Teacher vocab_size={teacher_model.config.vocab_size}, 
 
 # Resize student model token embeddings to match teacher
 if student_model.config.vocab_size != teacher_model.config.vocab_size:
-    student_model.resize_token_embeddings(teacher_model.config.vocab_size)
+    student_model.resize_token_embeddings(
+        teacher_model.config.vocab_size,
+        pad_to_multiple_of=64,
+        mean_resizing=False  # Use simple truncation/padding instead of mean resizing
+    )
     print(f"Resized student model token embeddings")
 
 print(f"After alignment: Teacher vocab_size={teacher_model.config.vocab_size}, Student vocab_size={student_model.config.vocab_size}")
@@ -201,7 +215,7 @@ test_prompts: list[str] = [
 distilled_model = AutoModelForCausalLM.from_pretrained(
     model_path,
     device_map="auto",
-    torch_dtype="auto",
+    dtype="auto",
     trust_remote_code=True
 )
 distilled_model.eval()

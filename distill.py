@@ -98,31 +98,40 @@ formatted_dataset = hf_dataset.map(format_data_for_gkd)
 # ============================================================================
 # Load Teacher Model
 # ============================================================================
+print("Loading teacher model...")
 teacher_model = AutoModelForCausalLM.from_pretrained(
     CONFIG["teacher_model_id"],
     torch_dtype="auto",
-    device_map="auto"
+    device_map="auto",
+    trust_remote_code=True
 )
 teacher_model.eval()  # Set to eval mode
+print("Teacher model loaded successfully")
 
 # ============================================================================
 # Load Student Model
 # ============================================================================
+print("Loading student model...")
 student_model = AutoModelForCausalLM.from_pretrained(
     CONFIG["student_model_id"],
     torch_dtype="auto",
-    device_map="auto"
+    device_map="auto",
+    trust_remote_code=True
 )
 student_model.train()  # Set to training mode
+print("Student model loaded successfully")
 
 # ============================================================================
 # Align Vocabularies
 # ============================================================================
-print(f"Before: Teacher={teacher_model.config.vocab_size}, Student={student_model.config.vocab_size}")
+print(f"Before alignment: Teacher vocab_size={teacher_model.config.vocab_size}, Student vocab_size={student_model.config.vocab_size}")
 
-student_model.resize_token_embeddings(teacher_model.config.vocab_size)
+# Resize student model token embeddings to match teacher
+if student_model.config.vocab_size != teacher_model.config.vocab_size:
+    student_model.resize_token_embeddings(teacher_model.config.vocab_size)
+    print(f"Resized student model token embeddings")
 
-print(f"After: Teacher={teacher_model.config.vocab_size}, Student={student_model.config.vocab_size}")
+print(f"After alignment: Teacher vocab_size={teacher_model.config.vocab_size}, Student vocab_size={student_model.config.vocab_size}")
 
 # ============================================================================
 # Tokenize Dataset
@@ -163,8 +172,8 @@ def patched_generate(*args, **kwargs) -> torch.Tensor:
         kwargs["input_ids"] = kwargs["input_ids"].to(student_model.device)
     if "attention_mask" in kwargs:
         kwargs["attention_mask"] = kwargs["attention_mask"].to(student_model.device)
-    # Force float16 for generation
-    with torch.autocast(device_type="cuda", dtype=torch.float16):
+    # Use autocast with appropriate dtype
+    with torch.autocast(device_type="cuda", dtype=torch.float16, enabled=torch.cuda.is_available()):
         return original_generate(*args, **kwargs)
 
 student_model.generate = patched_generate
@@ -192,7 +201,8 @@ test_prompts: list[str] = [
 distilled_model = AutoModelForCausalLM.from_pretrained(
     model_path,
     device_map="auto",
-    torch_dtype=torch.float16,
+    torch_dtype="auto",
+    trust_remote_code=True
 )
 distilled_model.eval()
 

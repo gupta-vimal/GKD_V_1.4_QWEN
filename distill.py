@@ -40,7 +40,6 @@ CONFIG: dict = {
         "gradient_checkpointing": True,
         "dataloader_pin_memory": True,  # Pin memory for faster GPU transfer
         "dataloader_num_workers": 4,  # Parallel data loading
-        "use_cache": False,  # Disable cache when gradient checkpointing is enabled
     },
 }
 
@@ -159,6 +158,11 @@ tokenized_dataset = formatted_dataset.map(tokenize_function, batched=True)
 # ============================================================================
 # Training Configuration
 # ============================================================================
+# Set use_cache=False when using gradient_checkpointing
+if CONFIG["training_config"].get("gradient_checkpointing"):
+    student_model.config.use_cache = False
+    teacher_model.config.use_cache = False
+
 training_args = GKDConfig(
 	**CONFIG["training_config"], **CONFIG["gkd_config"], remove_unused_columns=False
 )

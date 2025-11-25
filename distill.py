@@ -100,20 +100,29 @@ formatted_dataset = hf_dataset.map(format_data_for_gkd)
 # ============================================================================
 teacher_model = AutoModelForCausalLM.from_pretrained(
     CONFIG["teacher_model_id"],
-    device_map="auto",
-    torch_dtype=torch.float16,
+    torch_dtype="auto",
+    device_map="auto"
 )
-teacher_model.eval()  # FIX: Set to eval mode
+teacher_model.eval()  # Set to eval mode
 
 # ============================================================================
 # Load Student Model
 # ============================================================================
 student_model = AutoModelForCausalLM.from_pretrained(
     CONFIG["student_model_id"],
-    device_map="auto",
-    torch_dtype=torch.float16,
+    torch_dtype="auto",
+    device_map="auto"
 )
 student_model.train()  # Set to training mode
+
+# ============================================================================
+# Align Vocabularies
+# ============================================================================
+print(f"Before: Teacher={teacher_model.config.vocab_size}, Student={student_model.config.vocab_size}")
+
+student_model.resize_token_embeddings(teacher_model.config.vocab_size)
+
+print(f"After: Teacher={teacher_model.config.vocab_size}, Student={student_model.config.vocab_size}")
 
 # ============================================================================
 # Tokenize Dataset

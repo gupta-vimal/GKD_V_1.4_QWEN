@@ -14,7 +14,7 @@ from trl import GKDTrainer, GKDConfig
 CONFIG: dict = {
     "teacher_model_id": "Qwen/Qwen2.5-7B-Instruct",
     "student_model_id": "Qwen/Qwen2.5-3B-Instruct",
-    "dataset_file": "call_Details-data.csv",
+    "dataset_file": "TeleQnA.json",
     "num_prompts": None,  # None means use entire dataset
     "gkd_config": {"lmbda": 0.7, "beta": 0.5, "seq_kd": True},
     "training_config": {
@@ -50,19 +50,26 @@ print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f}
 # Load Dataset
 # ============================================================================
 import pandas as pd
+import json
 
-# Load CSV dataset
-csv_file = "call_Details-data.csv"
-df = pd.read_csv(csv_file)
+# Load JSON dataset
+json_file = "TeleQnA.json"
+with open(json_file, 'r', encoding='utf-8') as f:
+    data = json.load(f)
 
-# Extract prompts from the CSV (assumes a text/prompt column)
-# Adjust the column name based on your CSV structure
+# Extract prompts from the JSON
+# Format: "Question: [question]\nOptions: [options]\nAnswer: [answer]"
 prompts_list: list[str] = []
-for idx, row in df.iterrows():
-    # Get the first text column or adjust based on your CSV structure
-    prompt = str(row.iloc[0]) if len(row) > 0 else ""
-    if prompt and prompt != "nan":
-        prompts_list.append(prompt)
+for key, item in data.items():
+    if isinstance(item, dict):
+        question = item.get("question", "")
+        answer = item.get("answer", "")
+        explanation = item.get("explanation", "")
+        
+        # Create a formatted prompt combining question and answer
+        if question and answer:
+            prompt = f"Q: {question}\nA: {answer}\nExplanation: {explanation}"
+            prompts_list.append(prompt)
 
 # Use entire dataset or limit if num_prompts is specified
 if CONFIG["num_prompts"] is not None:

@@ -15,7 +15,7 @@ CONFIG: dict = {
     "teacher_model_id": "Qwen/Qwen2.5-7B-Instruct",
     "student_model_id": "Qwen/Qwen2.5-3B-Instruct",
     "dataset_file": "call_Details-data.csv",
-    "num_prompts": 20000,
+    "num_prompts": None,  # None means use entire dataset
     "gkd_config": {"lmbda": 0.7, "beta": 0.5, "seq_kd": True},
     "training_config": {
         "output_dir": "./student_model_gkd_Wtihout_peft",
@@ -64,8 +64,11 @@ for idx, row in df.iterrows():
     if prompt and prompt != "nan":
         prompts_list.append(prompt)
 
-# Limit to num_prompts
-prompts_list = prompts_list[:CONFIG["num_prompts"]]
+# Use entire dataset or limit if num_prompts is specified
+if CONFIG["num_prompts"] is not None:
+    prompts_list = prompts_list[:CONFIG["num_prompts"]]
+
+print(f"Loaded {len(prompts_list)} prompts from dataset")
 
 # ============================================================================
 # Tokenizer
